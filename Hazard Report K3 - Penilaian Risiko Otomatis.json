@@ -1,0 +1,733 @@
+{
+  "name": "Hazard Report K3 - Penilaian Risiko Otomatis",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": true,
+          "imageSize": "extraLarge"
+        }
+      },
+      "id": "2a5a351d-aeaf-4819-97d2-2cc18b2d2cca",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2048,
+        384
+      ],
+      "webhookId": "hazard-report-webhook",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "n02-c1",
+              "leftValue": "={{ Array.isArray($json.message.photo) && $json.message.photo.length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7a31b278-085c-40a1-8e3b-7e7d9717b64e",
+      "name": "Ada Foto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1824,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Mohon kirim FOTO kondisi bahaya beserta keterangan lokasi pada caption. Contoh: \"Pit Selatan - jalan hauling licin dan longsoran kecil\".",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "86ff6849-6431-4704-8911-75cf75e15f82",
+      "name": "Balas Minta Foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1616,
+        560
+      ],
+      "webhookId": "81e3c05c-52e6-4f05-b5aa-f22258c30942",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[$json.message.photo.length - 1].file_id }}",
+        "additionalFields": {}
+      },
+      "id": "e79a2fd6-3744-4f44-ae2f-0f60dca8025e",
+      "name": "Get Foto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1616,
+        288
+      ],
+      "webhookId": "024f0a60-bba5-442a-a4e9-24eee746598b",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3-flash-preview",
+          "mode": "list",
+          "cachedResultName": "models/gemini-3-flash-preview",
+          "cachedResultUrl": ""
+        },
+        "text": "=ROLE:\nKamu adalah HSE Officer berpengalaman di tambang batubara terbuka (open pit). Tugasmu adalah menganalisis foto dan keterangan dari pekerja untuk mengidentifikasi bahaya atau insiden K3.\n\nKONTEKS:\nLaporan berasal dari pekerja lapangan via Telegram.\nKeterangan pelapor (caption): \" {{ $('Telegram Trigger').item.json.message.caption || '-' }} \"\n\nTUGAS:\n1. Tentukan apakah foto/caption menunjukkan kondisi berbahaya, tindakan tidak aman, atau kecelakaan kerja (is_valid_hazard).\n2. Klasifikasikan ke dalam SATU kategori yang paling relevan dari daftar berikut:\n   - Kecelakaan Kerja / Insiden (Gunakan jika sudah terjadi cedera, korban jatuh, tergeletak, atau kontak fisik berbahaya)\n   - Bekerja di Ketinggian / Fall Hazard (Struktur, platform, tangga, rigging)\n   - Jalan Hauling / Transportasi Tambang\n   - Lereng / Highwall / Ground Control\n   - Alat Berat & Unit Operasional\n   - Kelistrikan & Energi\n   - Bahan Kimia / B3 / Kebakaran\n   - Housekeeping & Area Kerja\n   - APD / Alat Pelindung Diri\n   - Lainnya (Gunakan HANYA jika tidak sesuai dengan opsi di atas)\n3. Nilai Likelihood (1-5) dan Severity (1-5):\n   - Likelihood (Kemungkinan): 1 = Sangat Jarang ... 5 = Hampir Pasti / Sudah Terjadi\n   - Severity (Dampak): 1 = Tanpa Pertolongan Pertama ... 5 = Fatalitas / Kecelakaan Berat / Duka Cita\n   *Catatan: Jika foto/caption menunjukkan insiden yang SUDAH TERJADI (seperti pekerja terjatuh/pingsan), beri Severity tinggi (4-5) dan Likelihood (4-5).*\n4. Berikan maksimal 3 tindakan pengendalian / tanggap darurat segera, urut berdasarkan prioritas tercepat.\n\nATURAN:\n- Analisis berdasarkan bukti fisik visual di foto dan penjelasan di caption.\n- Jika ada indikasi korban cedera/terjatuh, prioritaskan tindakan Tanggap Darurat (ERT/Medis).\n- Jika foto buram atau tidak jelas, set confidence \"low\" dan needs_more_info true.\n- Jawab dalam Bahasa Indonesia.\n\nFORMAT OUTPUT (HANYA JSON valid, tanpa format markdown ```json):\n{\n  \"is_valid_hazard\": true,\n  \"category\": \"\",\n  \"description\": \"\",\n  \"likelihood\": 0,\n  \"severity\": 0,\n  \"reasoning\": \"\",\n  \"immediate_actions\": [\"\", \"\", \"\"],\n  \"confidence\": \"high|medium|low\",\n  \"needs_more_info\": false\n}",
+        "inputType": "binary",
+        "simplify": false,
+        "options": {}
+      },
+      "id": "d03d5817-45af-4243-ae61-91fd75b471e4",
+      "name": "Gemini Analisis Hazard",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        -1392,
+        288
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Vkh8S5G902fhYgoL",
+          "name": "Google Gemini(PaLM) Api account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Ambil teks JSON dari output Gemini\nconst raw = $input.item.json.candidates?.[0]?.content?.parts?.[0]?.text \n         ?? $input.item.json.content?.parts?.[0]?.text \n         ?? $input.item.json.text \n         ?? '';\n\nconst msg = $('Telegram Trigger').item.json.message;\n\nlet d = {};\ntry {\n  // Clean markdown block jika ada\n  const cleanJson = raw.replace(/```json|```/g, '').trim();\n  d = JSON.parse(cleanJson);\n} catch (e) {\n  d = { is_valid_hazard: false, confidence: 'low' };\n}\n\n// Clamp nilai likelihood & severity\nconst clamp = v => Math.min(5, Math.max(1, Number(v) || 1));\nconst likelihood = clamp(d.likelihood);\nconst severity = clamp(d.severity);\nconst score = likelihood * severity;\n\nlet level = 'Low';\nif (score >= 17) level = 'Extreme';\nelse if (score >= 10) level = 'High';\nelse if (score >= 5) level = 'Medium';\n\nconst now = new Date();\nconst pad = n => String(n).padStart(2, '0');\nconst ticket = `HZ-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${Math.floor(1000 + Math.random() * 9000)}`;\n\nconst actions = Array.isArray(d.immediate_actions) ? d.immediate_actions.filter(Boolean) : [];\n\nreturn {\n  json: {\n    ticket_id: ticket,\n    timestamp: now.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),\n    chat_id: msg.chat.id,\n    reporter: msg.from?.first_name || msg.from?.username || 'Unknown',\n    caption: msg.caption || '-',\n    is_valid: d.is_valid_hazard === true,\n    category: d.category || '-',\n    description: d.description || '-',\n    likelihood,\n    severity,\n    risk_score: score,\n    risk_level: level,\n    reasoning: d.reasoning || '-',\n    actions_text: actions.map((a, i) => `${i + 1}. ${a}`).join('\\n') || '-',\n    confidence: d.confidence || 'low',\n    status: 'Open'\n  }\n};"
+      },
+      "id": "d6677a2c-f689-4c5e-88ef-e27de0867a1c",
+      "name": "Hitung Risiko",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "n07-c1",
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "860858d9-45f2-4b82-b779-abd60eef2399",
+      "name": "Valid Hazard?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -944,
+        288
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Hitung Risiko').item.json.chat_id }}",
+        "text": "Foto belum menunjukkan kondisi bahaya atau kurang jelas. Mohon kirim ulang foto yang lebih jelas dengan keterangan lokasi.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "d884c5bc-6b33-4cf3-a28b-5fa6fb618327",
+      "name": "Balas Tidak Valid",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -736,
+        480
+      ],
+      "webhookId": "d00ff500-e593-4f87-b6f0-bc0c14d4969c",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1NX4aGqOLR7o5GC8cNhoN2kwpMtkxjIdiA4Zd_ymVZtQ",
+          "mode": "list",
+          "cachedResultName": "Penilaian Resiko",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NX4aGqOLR7o5GC8cNhoN2kwpMtkxjIdiA4Zd_ymVZtQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1NX4aGqOLR7o5GC8cNhoN2kwpMtkxjIdiA4Zd_ymVZtQ/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ticket_id": "={{ $json.ticket_id }}",
+            "timestamp": "={{ $json.timestamp }}",
+            "reporter": "={{ $json.reporter }}",
+            "lokasi_keterangan": "={{ $json.caption }}",
+            "kategori": "={{ $json.category }}",
+            "deskripsi": "={{ $json.description }}",
+            "likelihood": "={{ $json.likelihood }}",
+            "severity": "={{ $json.severity }}",
+            "risk_score": "={{ $json.risk_score }}",
+            "risk_level": "={{ $json.risk_level }}",
+            "tindakan_segera": "={{ $json.actions_text }}",
+            "confidence": "={{ $json.confidence }}",
+            "status": "={{ $json.status }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "ticket_id",
+              "displayName": "ticket_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reporter",
+              "displayName": "reporter",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "lokasi_keterangan",
+              "displayName": "lokasi_keterangan",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "kategori",
+              "displayName": "kategori",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deskripsi",
+              "displayName": "deskripsi",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "likelihood",
+              "displayName": "likelihood",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_score",
+              "displayName": "risk_score",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "risk_level",
+              "displayName": "risk_level",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "tindakan_segera",
+              "displayName": "tindakan_segera",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "confidence",
+              "displayName": "confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "e30791c2-6655-42e2-adbf-3859a701d07a",
+      "name": "Simpan ke Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -736,
+        192
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "8dOpp1yaxoGZni4J",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "Extreme/High-0",
+                    "leftValue": "={{ $('Hitung Risiko').item.json.risk_level }}",
+                    "rightValue": "Extreme",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "id": "Extreme/High-1",
+                    "leftValue": "={{ $('Hitung Risiko').item.json.risk_level }}",
+                    "rightValue": "High",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "Medium-0",
+                    "leftValue": "={{ $('Hitung Risiko').item.json.risk_level }}",
+                    "rightValue": "Medium",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "Low-0",
+                    "leftValue": "={{ $('Hitung Risiko').item.json.risk_level }}",
+                    "rightValue": "Low",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "or"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8aca8c00-f63e-4860-8b23-f69b96577a4d",
+      "name": "Level Risiko",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        -512,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "belajarautomasi77@gmail.com",
+        "subject": "=[HAZARD {{ $('Hitung Risiko').item.json.risk_level.toUpperCase() }}] {{ $('Hitung Risiko').item.json.ticket_id }} - {{ $('Hitung Risiko').item.json.category }}",
+        "message": "=<h3>Laporan Bahaya Risiko {{ $('Hitung Risiko').item.json.risk_level }}</h3><p><b>Tiket:</b> {{ $('Hitung Risiko').item.json.ticket_id }}<br><b>Waktu:</b> {{ $('Hitung Risiko').item.json.timestamp }}<br><b>Pelapor:</b> {{ $('Hitung Risiko').item.json.reporter }}<br><b>Lokasi/Keterangan:</b> {{ $('Hitung Risiko').item.json.caption }}<br><b>Kategori:</b> {{ $('Hitung Risiko').item.json.category }}<br><b>Skor:</b> {{ $('Hitung Risiko').item.json.likelihood }} x {{ $('Hitung Risiko').item.json.severity }} = {{ $('Hitung Risiko').item.json.risk_score }}</p><p><b>Deskripsi:</b> {{ $('Hitung Risiko').item.json.description }}</p><p><b>Alasan penilaian AI:</b> {{ $('Hitung Risiko').item.json.reasoning }}</p><p><b>Tindakan segera:</b><br>{{ $('Hitung Risiko').item.json.actions_text.replace(/\\n/g, '<br>') }}</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "22683ed9-a78a-4406-a62f-723eba4c0b83",
+      "name": "Email Alert HSE",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -288,
+        80
+      ],
+      "webhookId": "7bfb567f-fcb5-4bfe-b294-01a26076ad50",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "sWUCEwzU6ypykT18",
+          "name": "Gmail account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Hitung Risiko').item.json.chat_id }}",
+        "text": "=LAPORAN DITERIMA - RISIKO {{ $('Hitung Risiko').item.json.risk_level.toUpperCase() }}\nTiket: {{ $('Hitung Risiko').item.json.ticket_id }}\nKategori: {{ $('Hitung Risiko').item.json.category }}\nSkor: {{ $('Hitung Risiko').item.json.risk_score }}\n\nHSE dan supervisor sudah diberi notifikasi.\nTindakan segera:\n{{ $('Hitung Risiko').item.json.actions_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6406284b-5c9e-4402-97ae-9d2310b7a4d7",
+      "name": "Balas Urgent",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -64,
+        80
+      ],
+      "webhookId": "f688e8fd-c39f-4450-93f9-5749de7463ba",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Hitung Risiko').item.json.chat_id }}",
+        "text": "=LAPORAN DITERIMA - RISIKO MEDIUM\nTiket: {{ $('Hitung Risiko').item.json.ticket_id }}\nKategori: {{ $('Hitung Risiko').item.json.category }}\nSkor: {{ $('Hitung Risiko').item.json.risk_score }}\n\nPerbaikan dijadwalkan.\nTindakan:\n{{ $('Hitung Risiko').item.json.actions_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "989278c0-769c-45af-a70a-c429891c3479",
+      "name": "Balas Medium",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        288
+      ],
+      "webhookId": "b674a394-346a-48ae-b5e0-31acb08c23dd",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Hitung Risiko').item.json.chat_id }}",
+        "text": "=LAPORAN DITERIMA - RISIKO LOW\nTiket: {{ $('Hitung Risiko').item.json.ticket_id }}\nKategori: {{ $('Hitung Risiko').item.json.category }}\nSkor: {{ $('Hitung Risiko').item.json.risk_score }}\n\nTercatat untuk tindak lanjut rutin. Terima kasih sudah melapor.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "dbe6c2a0-f413-4488-a466-213d4c755384",
+      "name": "Balas Low",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -288,
+        464
+      ],
+      "webhookId": "0e6bae68-3c90-42df-897d-62621f811d80",
+      "credentials": {
+        "telegramApi": {
+          "id": "h5TWIIOy2QpCbUsU",
+          "name": "Pengendalian Resiko"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "**PROJECT: AUTOMATED HAZARD REPORT & RISK ASSESSMENT**\n1. **Background Masalah**\nRespons Lambat : Pelaporan bahaya K3 manual memperlambat klasifikasi dan tindakan penanganan di lapangan.\n\nPenilaian Subjektif: Estimasi tingkat risiko ($Likelihood \\times Severity$) sering tidak konsisten antar petugas HSE.\n\nRisiko Fatalitas: Insiden kritis (High/Extreme) terlambat mendapat notifikasi penanganan darurat (Emergency Response).\n\n2. **Alasan Layak Diautomasi**\n\nAnalisis Real-Time: Gemini AI memvalidasi foto & mengategorikan bahaya K3 secara instan via Telegram.\n\nStandardisasi Matriks Risiko: Kalkulasi skor dan Risk Level berjalan otomatis sesuai aturan terstandar.\n\nEskalasi Otomatis: Alert darurat langsung terikirim ke tim HSE jika terdeteksi bahaya bernilai tinggi, sekaligus merekam seluruh data ke Google Sheets untuk audit."
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2048,
+        96
+      ],
+      "id": "57fdbb9a-ee05-41ca-9533-69523469590a",
+      "name": "Sticky Note"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Ada Foto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ada Foto?": {
+      "main": [
+        [
+          {
+            "node": "Get Foto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas Minta Foto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Foto": {
+      "main": [
+        [
+          {
+            "node": "Gemini Analisis Hazard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Analisis Hazard": {
+      "main": [
+        [
+          {
+            "node": "Hitung Risiko",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hitung Risiko": {
+      "main": [
+        [
+          {
+            "node": "Valid Hazard?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Hazard?": {
+      "main": [
+        [
+          {
+            "node": "Simpan ke Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas Tidak Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simpan ke Sheets": {
+      "main": [
+        [
+          {
+            "node": "Level Risiko",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Level Risiko": {
+      "main": [
+        [
+          {
+            "node": "Email Alert HSE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas Medium",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Balas Low",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Alert HSE": {
+      "main": [
+        [
+          {
+            "node": "Balas Urgent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4d6893c4-47f3-4ed5-aeae-37186bf47fcd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "74b65863c296ed166ba836cc05fad9ffcbb6d11be4a81d0e253dac9a35c9a5f0"
+  },
+  "nodeGroups": [],
+  "id": "HnmBo5DTwuemjAKl",
+  "tags": []
+}
